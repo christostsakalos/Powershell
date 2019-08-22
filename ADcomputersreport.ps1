@@ -1,0 +1,1 @@
+﻿Get-ADComputer -Filter * -Property * | Select-Object Name,OperatingSystem,OperatingSystemVersion,ipv4Address,enabled,lastlogondate, createtimestamp |Export-CSV "T:\IT\Chris\Powershell\Reports for Imran\computersreport.csv"

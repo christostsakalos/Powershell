@@ -1,0 +1,1 @@
+﻿Get-mailbox  -database "Mailbox Database Ricodag04-250L" -ResultSize Unlimited  | Get-Mailboxstatistics | select DisplayName,Database,ServerName,TotalItemSize | sort TotalItemSize # | Export-CSV c:\users\c.tsakalos\downloads\test.csv

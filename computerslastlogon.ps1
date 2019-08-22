@@ -1,0 +1,1 @@
+﻿Get-ADcomputer -Filter * -properties * | Select Name, LastLogonDate, enabled  | Export-CSV "T:\IT\Chris\Powershell\Reports for Imran\LastLogon.csv"
