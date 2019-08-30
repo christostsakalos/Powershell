@@ -1,0 +1,3 @@
+﻿Get-Mailbox -ResultSize Unlimited | Select-Object UserPrincipalName, FirstName, LastName, Displayname, Database, IssueWarningQuota, ProhibitSendQuota,ProhibitSendReceiveQuota, IsMailboxEnabled,ServerName,PrimarySmtpAddress, RecipientType, WindowsEmailAddress, WhenChanged, WhenCreated |
+Export-Csv -Path "C:\Users\c.tsakalos\desktop\exchangereportfull.csv" 
+Send-MailMessage -From "administrator@ricogroup.co.uk" -to "i.bhatti@ricogroup.co.uk", "c.tsakalos@ricogroup.co.uk" -subject "AD report" -Attachment "C:\Users\c.tsakalos\desktop\exchangereportfull.csv" -smtpServer "172.24.15.10" -body "See attached..."
