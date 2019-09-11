@@ -1,0 +1,1 @@
+﻿Get-ADObject -Filter 'isDeleted -eq $True -and Name -like "nameofthegroup"' -IncludeDeletedObjects | Remove-ADOjbect
