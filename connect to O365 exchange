@@ -1,0 +1,5 @@
+$LiveCred = Get-Credential
+Write-Output "Getting the Exchange Online cmdlets"
+
+$Session = New-PSSession -ConfigurationName Microsoft.Exchange -ConnectionUri https://ps.outlook.com/powershell/ -Credential $LiveCred -Authentication Basic -AllowRedirection
+Import-PSSession $Session 
