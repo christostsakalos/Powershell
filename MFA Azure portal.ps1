@@ -1,0 +1,1 @@
+﻿Connect-AzAccount -Tenant "tenantid" ###Use the list from MSOL service to get tenantid
