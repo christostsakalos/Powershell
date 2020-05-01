@@ -1,0 +1,434 @@
+#Requires -RunAsAdministrator
+
+ 
+
+#region ### Detect installed Backup Products
+
+ 
+
+$servername = ${Env:ComputerName}
+
+$OSversion = (Get-CimInstance Win32_OperatingSystem).Caption
+
+ 
+
+$DetectBackupProduct = Get-ItemProperty "HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\{*"
+
+$DetectBackupProduct | % {
+
+                          If ($_.DisplayName -match "Data Protection Manager") {
+
+                                                                                $DPMProdName = $_.DisplayName
+
+                                                                                $DPMDetected = 1
+
+                                                                               }
+
+                          If ($_.DisplayName -match "Microsoft Azure Recovery Services Agent") {
+
+                                                                                                $MARSProdName = $_.DisplayName
+
+                                                                                                $MARSDetected = 1
+
+                                                                                               }
+
+                         }
+
+ 
+
+#endregion
+
+ 
+
+#region ### Set log path according to detected product and install directory
+
+if ($DPMDetected -eq 0 -and $MARSDetected -eq 1) {
+
+                                                  $InstallationPath = Get-ItemProperty -Path "Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows Azure Backup\Setup" -Name "InstallPath" -ErrorAction SilentlyContinue
+
+                                                  $InstallPath = $InstallationPath.InstallPath
+
+                                                 }
+
+if ($DPMDetected -eq 1) {
+
+                         $InstallationPath = Get-ItemProperty -Path "Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Microsoft Data Protection Manager\Setup" -Name "InstallPath" -ErrorAction SilentlyContinue
+
+                         $InstallPath = $InstallationPath.InstallPath
+
+                        }
+
+if ($MARSDetected -eq 1) {
+
+                          $MARSInstallPath = Get-ItemProperty -Path "Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows Azure Backup\Setup" -Name "InstallPath" -ErrorAction SilentlyContinue
+
+                          $MARSInstallPath = $MARSInstallPath.InstallPath
+
+                         }
+
+$OutFilePath = $InstallPath+"Temp"
+
+$OutFileName = "DPM-MAB-MARS_Analysis.txt"
+
+Write-Host "Setting log path to $OutFilePath\$OutFileName`n" -ForegroundColor Yellow
+
+ 
+
+$GetD = get-date -format "hh:mm:tt dd-MM-yyyy"
+
+" " | Out-File $OutFilePath\$OutFileName -Append
+
+"-------------------" | Out-File $OutFilePath\$OutFileName -Append
+
+$GetD | Out-File $OutFilePath\$OutFileName -Append
+
+"-------------------" | Out-File $OutFilePath\$OutFileName -Append
+
+"" | Out-File $OutFilePath\$OutFileName -Append
+
+#endregion
+
+ 
+
+#region ### Log OS and App version
+
+if ($DPMDetected -eq 1) { $DPMProdVersion = Get-ChildItem -Path "$InstallPath\bin\MsdpmDll.dll"
+
+                          $DPMProdVersion = $DPMProdVersion.VersionInfo.ProductVersion
+
+                        }
+
+if ($MARSDetected -eq 1) { $MARSProdVersion = Get-ChildItem -Path "$MARSInstallPath\bin\CBEngine.exe"
+
+                           $MARSProdVersion = $MARSProdVersion.VersionInfo.ProductVersion
+
+                         }
+
+ 
+
+ 
+
+"OS & Application Versions" | Out-File $OutFilePath\$OutFileName -Append
+
+"-------------------------" | Out-File $OutFilePath\$OutFileName -Append
+
+"Hostname       : $servername" | Out-File $OutFilePath\$OutFileName -Append
+
+"OS version     : $OSversion" | Out-File $OutFilePath\$OutFileName -Append
+
+"DPM\MAB version: $DPMProdName - $DPMProdVersion" | Out-File $OutFilePath\$OutFileName -Append
+
+"MARS version   : $MARSProdName - $MARSProdVersion" | Out-File $OutFilePath\$OutFileName -Append
+
+ 
+
+#endregion
+
+ 
+
+#region ### Last BootTime
+
+$LastBootTime = Get-CimInstance -ClassName win32_operatingsystem | select csname, lastbootuptime
+
+"" | Out-File $OutFilePath\$OutFileName -Append
+
+"Last Boot Time" | Out-File $OutFilePath\$OutFileName -Append
+
+"--------------" | Out-File $OutFilePath\$OutFileName -Append
+
+"$LastBootTime.lastbootuptime" | Out-File $OutFilePath\$OutFileName -Append
+
+#endregion
+
+ 
+
+#region ### List Installed Cumulative updates
+
+$WindowsUpdate = new-object -com “Microsoft.Update.Searcher”
+
+$AllUpdates = $WindowsUpdate.GetTotalHistoryCount()
+
+$All = $WindowsUpdate.QueryHistory(0,$AllUpdates)
+
+$CollectionArray = @{}
+
+$Date = Get-Date
+
+$All | % {
+
+          $UpdateName = $_.title
+
+          $UpdateTime = $_.Date
+
+          If ($UpdateName -notmatch "Defender" -and $UpdateName -notmatch "Removal Tool" -and $UpdateTime -gt $Date.AddDays(-90)) {$CollectionArray.add($_.Date, $_.Title)}
+
+         }
+
+"" | Out-File $OutFilePath\$OutFileName -Append
+
+"Installed Cumulative Updates" | Out-File $OutFilePath\$OutFileName -Append
+
+"----------------------------" | Out-File $OutFilePath\$OutFileName -Append
+
+"  Install Date                Update Title" | Out-File $OutFilePath\$OutFileName -Append
+
+#$CollectionArray.GetEnumerator() | Sort-Object -Property Value -Descending
+
+$CollectionArray.GetEnumerator() | Sort-Object -Property Value -Descending | ft -HideTableHeaders | Out-File $OutFilePath\$OutFileName -Append
+
+#endregion
+
+ 
+
+#region ### Proxy configuration
+
+$CurrentUser01 = Get-ItemProperty -Path Registry::”HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Internet Settings\"
+
+"" | Out-File $OutFilePath\$OutFileName -Append
+
+"Proxy configuration" | Out-File $OutFilePath\$OutFileName -Append
+
+"-------------------" | Out-File $OutFilePath\$OutFileName -Append
+
+if ($CurrentUser01.ProxyEnable -eq 1) {
+
+                                       $CurrentUserProxy = $CurrentUser01.ProxyServer
+
+                                       "Current user has proxy configured" | Out-File $OutFilePath\$OutFileName -Append
+
+                                       "Proxy IP $CurrentUserProxy" | Out-File $OutFilePath\$OutFileName -Append
+
+                                       # Check LocalSys proxy config
+
+                                       $LocalSystem01 = Get-ItemProperty -Path Registry::”HKEY_USERS\S-1-5-18\Software\Microsoft\Windows\CurrentVersion\Internet Settings"
+
+                                      
+
+                                       if ($LocalSystem01.ProxyEnable -eq $null -or $LocalSystem01.ProxyEnable -eq 0 ) {
+
+                                                                                                                        "Proxy Not configured for Local System Account" | Out-File $OutFilePath\$OutFileName -Append
+
+                                                                                                                       }
+
+                                                                                                                       Else
+
+                                                                                                                       {
+
+                                                                                                                        $LocalSystemProxy = $LocalSystem01.ProxyServer
+
+                                                                                                                        "Local System Account has proxy configured" | Out-File $OutFilePath\$OutFileName -Append
+
+                                                                                                                        "Proxy IP $LocalSystemProxy" | Out-File $OutFilePath\$OutFileName -Append
+
+                                                                                                                       }
+
+                                      }
+
+                                      Else
+
+                                      {
+
+                                       "Proxy Not configured for current user" | Out-File $OutFilePath\$OutFileName -Append
+
+                                      }
+
+#endregion
+
+ 
+
+#region ### Detect Defender & Exclusions
+
+$CheckDefender = Get-WindowsFeature Windows-Defender
+
+"" | Out-File $OutFilePath\$OutFileName -Append
+
+"Defender Configuration" | Out-File $OutFilePath\$OutFileName -Append
+
+"----------------------" | Out-File $OutFilePath\$OutFileName -Append
+
+If ($CheckDefender.Installed -eq "True") {
+
+                                          $GetDefender = Get-MpPreference -ErrorAction SilentlyContinue
+
+                                          $DefRMStatus = $GetDefender.DisableRealtimeMonitoring
+
+                                          If ($DefRMStatus -eq "True") {
+
+                                                                        #Write-Host "Defender Realtime Monitoring is currently disabled."
+
+                                                                        "Defender Realtime Monitoring is currently disabled." | Out-File $OutFilePath\$OutFileName -Append
+
+                                                                       }
+
+                                                                       Else
+
+                                                                       {
+
+                                                                        #Write-Host "Defender Realtime Monitoring is currently enabled."
+
+                                                                        "Defender Realtime Monitoring is currently enabled" | Out-File $OutFilePath\$OutFileName -Append
+
+                                                                       }
+
+                                          $DefPathExclusions = $GetDefender.ExclusionPath
+
+                                          $DefProcExclusions = $GetDefender.ExclusionProcess
+
+                                          "" | Out-File $OutFilePath\$OutFileName -Append
+
+                                          "Path Exclusions:" | Out-File $OutFilePath\$OutFileName -Append
+
+                                          $DefPathExclusions | % {"$_" | Out-File $OutFilePath\$OutFileName -Append}
+
+                                          "" | Out-File $OutFilePath\$OutFileName -Append
+
+                                          "Process Exclusions:" | Out-File $OutFilePath\$OutFileName -Append
+
+                                          $DefProcExclusions | % {"$_" | Out-File $OutFilePath\$OutFileName -Append}
+
+                                          }
+
+                                          Else
+
+                                          {
+
+                                           #Write-Host "Defender NOT Installed"
+
+                                           "Defender NOT Installed" | Out-File $OutFilePath\$OutFileName -Append
+
+                                          }
+
+ 
+
+#endregion
+
+ 
+
+#region ### Check DPM\MAB services & Accounts
+
+if ($DPMDetected -eq 1 ) {
+
+ 
+
+# Netlogon
+
+$GetNetlgon = Get-WmiObject win32_service -Filter "Name Like 'Netlogon'"
+
+$NetlogonStartMode = $GetNetlgon.StartMode
+
+    if ($NetlogonStartMode -notmatch "Auto" ){
+
+                                                Write-Host "Netlogon Service not in Automatic Startup" -ForegroundColor Red
+
+                                                "Netlogon Service not in Automatic Startup" | Out-File $OutFilePath\$OutFileName -Append
+
+                                               }
+
+# MSDPM
+
+$GetMSDPM = Get-WmiObject win32_service -Filter "Name Like 'MSDPM'"
+
+$MSDPMStartMode = $GetMSDPM.StartMode
+
+$MSDPMLogAcc = $GetMSDPM.StartName
+
+    if ($MSDPMStartMode -notmatch "Manual" ){
+
+                                             Write-Host "DPM Service not in Manual Startup" -ForegroundColor Red
+
+                                             "DPM Service not in Manual Startup" | Out-File $OutFilePath\$OutFileName -Append
+
+                                            }
+
+    if ($MSDPMLogAcc -notmatch "LocalSystem" ){
+
+                                               Write-Host "DPM Service not running with LocalSystem" -ForegroundColor Yellow
+
+                                               "DPM Service not running with LocalSystem" | Out-File $OutFilePath\$OutFileName -Append
+
+                                              }
+
+# DPMAM
+
+$DPMAMService = Get-WmiObject win32_service -Filter "Name Like 'DPMAMService'"
+
+$DPMAMState = $DPMAMService.State
+
+$DPMAMStartMode = $DPMAMService.StartMode
+
+$DPMAMLogAcc = $DPMAMService.StartName
+
+    if ($DPMAMState -notmatch "Running" ){
+
+                                              Write-Host "DPMAMService Service not Running" -ForegroundColor Red
+
+                                              "DPMAMService Service not Running" | Out-File $OutFilePath\$OutFileName -Append
+
+                                             }
+
+    if ($DPMAMStartMode -notmatch "Auto" ){
+
+                                                Write-Host "DPMAMService Service not in Automatic Startup" -ForegroundColor Red
+
+                                                "DPMAMService Service not in Automatic Startup" | Out-File $OutFilePath\$OutFileName -Append
+
+                                               }
+
+    if ($DPMAMLogAcc -notmatch "LocalSystem" ){
+
+                                               Write-Host "DPMAMService Service not running with LocalSystem" -ForegroundColor Yellow
+
+                                               "DPMAMService Service not running with LocalSystem" | Out-File $OutFilePath\$OutFileName -Append
+
+                                              }
+
+# DPM Writer
+
+$DpmWriter = Get-WmiObject win32_service -Filter "Name Like 'DpmWriter'"
+
+$DpmWriterState = $DpmWriter.State
+
+$DpmWriterStartMode = $DpmWriter.StartMode
+
+$DpmWriterLogAcc = $DpmWriter.StartName
+
+    if ($DpmWriterState -notmatch "Running" ){
+
+                                              Write-Host "DPM Writer Service not Running" -ForegroundColor Red
+
+                                              "DPM Writer Service not Running" | Out-File $OutFilePath\$OutFileName -Append
+
+                                             }
+
+    if ($DpmWriterStartMode -notmatch "Auto" ){
+
+                                               Write-Host "DPM Writer Service not in Automatic Startup" -ForegroundColor Red
+
+                                               "DPM Writer Service not in Automatic Startup" | Out-File $OutFilePath\$OutFileName -Append
+
+                                              }
+
+    if ($DpmWriterLogAcc -notmatch "LocalSystem" ){
+
+                                                   Write-Host "DPM Writer Service not running with LocalSystem" -ForegroundColor Yellow
+
+                                                   "DPM Writer Service not running with LocalSystem" | Out-File $OutFilePath\$OutFileName -Append
+
+                                                  }
+
+# DPMLA
+
+$DPMLA = Get-WmiObject win32_service -Filter "Name Like 'DPMLA'"
+
+$DPMLAStartMode = $DPMLA.StartMode
+
+$DPMLALogAcc = $DPMLA.StartName
+
+    if ($DPMLAStartMode -notmatch "Manual" ){
+
+                                             Write-Host "DPMLA Service not in Manual Startup" -ForegroundColor Red
+
+                                             "DPMLA Service not in Manual Startup" | Out-File $OutFilePath\$OutFileName -Append
+
+                                            }
+
