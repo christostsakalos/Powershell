@@ -1,0 +1,45 @@
+Detect the problem
+
+++++++++++++++++++++++++++++++++
+
+SELECT AhpAlert.AlertID,
+
+   ChangeID,
+
+   Type,           
+
+   OccuredSince,
+
+   Severity,
+
+   ErrorXml,
+
+   DetailedErrorXml,
+
+   Resolution,        
+
+   ResolvedTime
+
+FROM dbo.tbl_AHP_Alerts AS AhpAlert
+
+WHERE AhpAlert.AlertId not in (   SELECT AlertId FROM dbo.tbl_PRM_AlertExtension)
+
+         and Type = 72
+
+ 
+
++++++++++++++++++++++++++++++++++
+
+Run this if the first query gives any output
+
+++++++++++++++++++++++++++++++++++
+
+DELETE tbl_AHP_Alerts WHERE AlertID in (SELECT AhpAlert.AlertID    
+
+FROM dbo.tbl_AHP_Alerts AS AhpAlert
+
+WHERE AhpAlert.AlertId not in (SELECT AlertId FROM dbo.tbl_PRM_AlertExtension)
+
+         and Type = 72)
+
+ 
